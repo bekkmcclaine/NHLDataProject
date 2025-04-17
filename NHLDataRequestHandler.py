@@ -7,6 +7,8 @@ class NHLDataRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.lower().startswith("/players"):
             self.do_player_detail()
+        elif self.path.lower() == "/pittsburgh_penguins":
+            self.do_pittsburgh_penguins()
         else:
             self.do_main_index()
 
@@ -54,12 +56,30 @@ class NHLDataRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(response.encode('utf-8'))
 
 
+    def do_pittsburgh_penguins(self):
+        print("Request received for Pittsburgh Penguins page")
+        with open('templates/PittsburghPenguins.html') as penguins_file:
+            template = penguins_file.read()
+
+        players = self.fetch_penguins_players()
+        penguins_player_list_html = ""
+        for player in players:
+            penguins_player_list_html += f"<li><a href='/players/{player.player_id}'>{player.full_name}</a></li>\n"
+
+        response = template.replace("{{penguins_player_list}}", penguins_player_list_html)
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(response.encode('utf-8'))
+
+
     def fetch_player_list(self):
         conn = sqlite3.connect("data/nhl_team_data.db")
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT player_id, full_name, team, position, games_played, goals, assists, points, plus_minus, penalty_minutes 
-            FROM players""")
+            SELECT player_id, full_name, team, position, games_played, 
+            goals, assists, points, plus_minus, penalty_minutes 
+            FROM players """)
         contents = cursor.fetchall()
         conn.close()
         return [Player(row) for row in contents]
@@ -69,11 +89,25 @@ class NHLDataRequestHandler(BaseHTTPRequestHandler):
         conn = sqlite3.connect("data/nhl_team_data.db")
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT player_id, full_name, team, position, games_played, goals, 
-                    assists, points, plus_minus, penalty_minutes 
+            SELECT player_id, full_name, team, position, games_played, 
+            goals, assists, points, plus_minus, penalty_minutes 
             FROM players as p 
             WHERE p.player_id = ?""",(player_id,))
         row = cursor.fetchone()
         conn.close()
         return Player(row)
 
+
+    def fetch_penguins_players(self):
+        conn = sqlite3.connect("data/nhl_team_data.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT player_id, full_name, team, position, games_played, goals, 
+            assists, points, plus_minus, penalty_minutes 
+            FROM players
+            WHERE team = 'PIT'""")
+        contents = cursor.fetchall()
+        conn.close()
+
+        print(f"Fetched Penguins Players: {contents}")
+        return [Player(row) for row in contents]
