@@ -9,6 +9,8 @@ class NHLDataRequestHandler(BaseHTTPRequestHandler):
             self.do_player_detail()
         elif self.path.lower() == "/pittsburgh_penguins":
             self.do_pittsburgh_penguins()
+        elif self.path.lower() == "/penguins_hits":
+            self.do_penguins_hits()
         else:
             self.do_main_index()
 
@@ -73,6 +75,34 @@ class NHLDataRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(response.encode('utf-8'))
 
 
+    def do_penguins_hits(self):
+        print("Request received for Penguins hits page")
+
+        with open('templates/PenguinsHits.html') as hits_file:
+            template = hits_file.read()
+
+        hits_data = self.fetch_penguins_hits()
+
+        print(f"Rendering Penguins hits page with {len(hits_data)} entries.")
+
+        hits_list_html = ""
+        for entry in hits_data:
+            hits_list_html += f"""
+                <tr>
+                    <td><a href='/players/{entry[0]}'>{entry[1]}</a></td>
+                    <td>{entry[2]}</td>
+                    <td>{entry[3]}</td>
+                </tr>\n
+            """
+
+        response = template.replace("{{hits_list}}", hits_list_html)
+
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(response.encode('utf-8'))
+
+
     def fetch_player_list(self):
         conn = sqlite3.connect("data/nhl_team_data.db")
         cursor = conn.cursor()
@@ -111,3 +141,21 @@ class NHLDataRequestHandler(BaseHTTPRequestHandler):
 
         print(f"Fetched Penguins Players: {contents}")
         return [Player(row) for row in contents]
+
+
+    def fetch_penguins_hits(self):
+        conn = sqlite3.connect("data/nhl_team_data.db")
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT p.player_id, p.full_name,
+                  SUM(CASE WHEN h.hitter_id = p.player_id THEN 1 ELSE 0 END) AS hits_given,
+                  SUM(CASE WHEN h.hittee_id = p.player_id THEN 1 ELSE 0 END) AS hits_received
+         FROM players p
+         LEFT JOIN hits h ON p.player_id = h.hitter_id OR p.player_id = h.hittee_id
+         WHERE p.team = 'PIT'
+         GROUP BY p.player_id
+         ORDER BY p.full_name """)
+        hits_data = cursor.fetchall()
+        conn.close()
+        return hits_data
